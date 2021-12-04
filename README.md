@@ -8,3 +8,5 @@ circular_barplot is the code for the circualr barplot.
 
 animation_circular_barplot is the code for the animation circular barplot. 
 Thanks to r graph gallery who provides an example, and thanks to the package gganimate.
+
+Choro 2 is the code for choropleth.

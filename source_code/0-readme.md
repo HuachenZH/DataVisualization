@@ -1,4 +1,4 @@
-In this folder I upload my source R code, initial Rmarkdown file and a folder of HTML.
+In this folder I upload my source R code, a folder of initial Rmarkdown file and a folder of HTML.
 
 The Rmarkdown can do its work, however I find it not enough aesthethic, so I found a template of HTML which is free and legal to use, then replace the contents by my R results, directly in the HTML file.
 

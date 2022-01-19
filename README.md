@@ -1,4 +1,4 @@
-# Datavis_feat.Rstudio
+# DataVisualization_feat.Rstudio
 A scolar project of data visualization using the R language
 
 Hi, welcome.

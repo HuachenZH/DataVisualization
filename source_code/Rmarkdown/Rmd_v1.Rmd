@@ -1,0 +1,390 @@
+---
+title: "Rmarkdown_v1"
+author: "AHOUANVOEKE Oniel, Huachen ZHANG"
+date: "2021/12/1"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Data Visualization Project
+# A study of immigrants in Europe from 2011 to 2019
+
+## Introduction of project
+Our study is based on data from recent immigrants by gender, age and citizenship in European countries.
+
+## Load libraries
+
+These are the necessary libraries to run the code.
+```{r Load libraries, message=FALSE, warning=FALSE}
+library(readr)
+library(ggplot2)
+library(gganimate)
+library(rgdal)
+library(RColorBrewer)
+library(dplyr)
+library(circlize)
+library(tidyverse)
+library(hrbrthemes)
+library(viridis)
+library(caTools)
+```
+## Import data set
+In this section we use read_csv to import the data set. read_csv is a function of the package readr.
+You can find the original source of the data set in this website :
+https://ec.europa.eu/eurostat/databrowser/view/lfst_rimgpnga/default/table?lang=en
+```{r import data set, message=FALSE, warning=FALSE}
+thisPageData <- read_csv("C:/Users/eziod/Pictures/S7/DataVisualisation/Project/thisPageData.csv")
+names(thisPageData)[9]<-"year"
+names(thisPageData)[10]<-"value"
+head(thisPageData)
+```
+You may wonder about the name of the variable, why it is called thisPageData. On the website, there are several download options, we can choose between "this page data", "full data" and "source data". We've downloaded all of the three. There are 343 lines in "this page data", 1816 lines in "full data" and 27977 lines in "source data". However all of the three have the same amount of countries : 38 countries.
+
+At the beginning of the project, we are not very sure about our skill in R, so we've chosen the smallest. We've found at the end of the project that this might be a bit too small.
+
+As you can see, there are more than 10 columns in this data set. However, those who interest us are just three or four of them.
+
+A little explanation about the data set :DATAFLOW is the intern reference of the database, which we don't try to understand.LAST UPDATE: as the name shows, it's the last update time.FREQ: the time-frequency, A stands for annual.SEX: "TRUE" means it concludes both man and woman.geo: The abbreviation of the countries.value: number of immigrants, in the percentage of the total population.OBS_FLAG: comments about the value, there will be (b): break-in time series, (c): confidential and so on. In this study, we don't take care about it.
+For some further reasons which will be revealed later, we've added two columns, full_name, and region. The operation is done with Excel.
+
+
+## Line plot of Luxembourg
+
+We started with a simple graph, a line chart of Luxembourg. We chose Luxembourg randomly.
+
+```{r Lineplot Luxembourg, echo=FALSE, message=FALSE, warning=FALSE}
+#create a dataset for luxembourg
+year<-2011:2019
+temp<-thisPageData$geo=="LU"
+population<-as.vector(unlist(thisPageData[temp,10]))
+luxembourg<-data.frame(year,population)
+#time to ggplot
+ggplot(luxembourg,aes(x=year,y=population))+
+  geom_line(color="#69b3a2", size=2, alpha=1, linetype=1)+
+  geom_text(label=population)+
+  labs(title="Immigration change of Luxembourg",caption="values are in percentage of total population",y="% of population")+
+  scale_x_continuous(limits=c(2011,2019), breaks=seq(from=2011, to=2019, by=1))
+```
+
+A line plot of the percentage of immigrants in the total population. 
+For example, in the year 2011, people who immigrated to Luxembourg take 10.4% of the total population of the country.
+
+We can see that the percentage of the population increased between 2011 and 2012 and decrease between 2012 and 2013. After this, between 2013 and 2016, the percentage constantly increases and decreases slowly in 2017 and increase again between 2017 and 2019.
+
+
+
+
+## Circular barplot
+
+Here, a circular barplot shows the different European countries classified by region, with the year, the value, and their full name. It's about the year 2019.
+We tried to find a way which can visualize all the countries at the same time, the solution is a circular barplot.
+
+```{r Circular barplot, message=FALSE, warning=FALSE}
+barcir<-thisPageData[thisPageData$year==2019,]
+barcir<-data.frame(barcir$geo,barcir$year,barcir$value,barcir$full_name,barcir$region)
+colnames(barcir)<-c("geo","year","value","full_name","region")
+# Set a number of 'empty bar' to add at the end of each group
+emptyBar<-3
+toAdd<-data.frame(matrix(NA,emptyBar*nlevels(as.factor(barcir$region)),ncol(barcir)))
+colnames(toAdd)<-colnames(barcir) #error if i don't change the name
+toAdd$region<-rep(levels(as.factor(barcir$region)),each=emptyBar)
+# add toAdd into barcir, with row bind
+barcir<-rbind(barcir, toAdd)
+# grouper par groupe
+barcir <- barcir %>% arrange(region,value) # disorder without "value"
+barcir$id<-seq(1,nrow(barcir))
+# prepare a dataframe for base lines
+base_data <- barcir %>% 
+  group_by(region) %>% 
+  summarize(start=min(id), end=max(id) - emptyBar) %>% 
+  rowwise() %>% 
+  mutate(title=mean(c(start, end)))
+# get the name and the y position of each label
+label_barcir<-barcir
+number_of_bar<-nrow(label_barcir)
+angle<-90-360*(label_barcir$id-0.5)/number_of_bar
+label_barcir$hjust<-ifelse(angle< -90,1,0)
+label_barcir$angle<-ifelse(angle< -90, angle+180, angle) #attention, il faut angle< -90, sinon erreur avec angle<-90
+# make the plot
+p_barcir<-ggplot(barcir, aes(x = as.factor(id),y=value, fill=region))+
+  geom_bar(stat="identity",alpha=0.5)+
+  ylim(-10,20)+
+  theme_minimal()+
+  theme(
+    legend.position = "none",
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    panel.grid = element_blank(),
+    plot.margin = unit(rep(-1,4), "cm")
+  )+
+  coord_polar()+
+  geom_text(data=label_barcir, aes(x=id, y=value+2,label=paste(full_name, value, sep=" , "), hjust=hjust), color="black",fontface="bold", alpha=0.6, size=3, angle= label_barcir$angle, inherit.aes = FALSE)+
+  geom_segment(data=base_data, aes(x = start, y = -1, xend = end, yend =-1), colour = "black", alpha=0.8, size=0.6 , inherit.aes = FALSE )  +
+  geom_text(data=base_data, aes(x = title, y = -1.5, label=region), hjust=c(1,1,1,0,0), colour = "black", alpha=0.8, size=1.8, fontface="bold", inherit.aes = FALSE)
+
+p_barcir
+
+```
+Now you can see why two new columns (full_name and region) are added in the source file. With the region column, we can group the countries according to their geographic region. With the full_name column, we don't need to search in Google what "CH" stands for. (You might think it means China, but in fact it means Switzerland.)
+Some countries don't appear because there is no value for the country.
+
+
+
+
+## Animation circular barplot
+A small problem with the previous barplot is that we can only show the case of one year, we can't inspect the evolution from 2011 to 2019. Another imperfection is the bar of Luxembourg is too tall, it makes the difference between others bars not obvious enough.
+
+To make it better, we decided to make an animation from 2011 to 2019, without Luxembourg, so that we can cover all the years, with a clearer difference between the bars.
+
+```{r anime_barcir, message=FALSE, warning=FALSE}
+barcir<-thisPageData
+barcir<-data.frame(barcir$geo,barcir$year,barcir$value,barcir$full_name,barcir$region)
+colnames(barcir)<-c("geo","year","value","full_name","region")
+# delete Luxembourg
+barcir<-barcir[-which(barcir$geo=="LU"),]
+
+# Set a number of 'empty bar' to add at the end of each group
+emptyBar<-5
+toAdd<-data.frame(matrix(NA,emptyBar*nlevels(as.factor(barcir$region)),ncol(barcir)))
+colnames(toAdd)<-colnames(barcir) 
+toAdd$region<-rep(levels(as.factor(barcir$region)),each=emptyBar)
+toAdd$geo<-rep(levels(as.factor(barcir$region)),each=emptyBar)
+
+# add toAdd into barcir, with row bind
+barcir<-rbind(barcir, toAdd)
+# grouper par groupe
+barcir <- barcir %>% arrange(region) 
+barcir$id<-seq(1,nrow(barcir))
+
+# create id2 for the animation.
+j=1
+for(i in 2:nrow(barcir)){
+  if(barcir[i,1]==barcir[i-1,1]){
+    barcir[i-1,7]<-j
+  }else{
+    barcir[i-1,7]<-j
+    j<-j+1
+    barcir[i,7]<-j
+  }
+}
+barcir[nrow(barcir),7]<-j
+colnames(barcir)[7]<-"id2"
+
+# prepare a dataframe for base lines
+base_data <- barcir %>% 
+  group_by(region) %>% 
+  summarize(start=min(id2), end=max(id2)-1   ) %>% 
+  rowwise() %>% 
+  mutate(title=mean(c(start, end)))
+
+# get the name and the y position of each label
+label_barcir<-barcir
+number_of_bar<-nlevels(as.factor(barcir$id2))
+angle<-90-360*(label_barcir$id2-0.5)/number_of_bar
+label_barcir$hjust<-ifelse(angle< -90,1,0)
+label_barcir$angle<-ifelse(angle< -90, angle+180, angle) #attention, il faut angle< -90, sinon erreur avec angle<-90
+
+# make the plot
+p_barcir<-ggplot(barcir, aes(x = as.factor( id2  ),y=value, fill=region))+
+  geom_bar(stat="identity",alpha=0.5)+
+  ylim(-7,10)+
+  theme_minimal()+
+  theme(
+    legend.position = "none",
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    panel.grid = element_blank(),
+    plot.margin = unit(rep(-1,4), "cm")
+  )+
+  coord_polar()+
+  geom_text(data=label_barcir, aes(x=id2, y=value+2,label=paste(full_name, value, sep=" , "), hjust=hjust), color="black",fontface="bold", alpha=0.6, size=4, angle= label_barcir$angle, inherit.aes = FALSE)+
+  
+  geom_segment(data=base_data, aes(x = start, y = -1, xend = end, yend =-1), colour = "black", alpha=0.8, size=0.6 , inherit.aes = FALSE )  +
+  geom_text(data=base_data, aes(x = title, y = -1.5, label=region), hjust=c(1,1,1,0,0), colour = "black", alpha=0.8, size=2, fontface="bold", inherit.aes = FALSE)+
+  
+  # gganimate staff
+  transition_states(
+    year,
+    transition_length=2,
+    state_length = 1
+  )+
+  ease_aes('sine-in-out')
+
+animate(p_barcir, duration=5, fps=30, width=700, height=700, renderer=gifski_renderer())
+# Save at gif:
+anim_save("anim_barcir.gif")
+
+p_barcir
+```
+As we can see, this is a circular bar plot similar to the one we have already shown, but here the circular bar plot shows the evolution of the population until the year 2020.
+
+A few technical explanations:The animation is made by the function transition_states, thanks to the package gganimate. transition_states means to make animation according to different states. In our case, the state is the year. The new column id2 that we've added is used for putting the animation in the right way.
+
+It's really a pity that we haven't been able to put a label which shows the year. We could have a try with transition_time and frame_time, however we have no longer time to spend on this.
+
+
+
+
+## Animation line plot
+The animation of the circular barplot seems great, a further question appears: is barplot the best way to show an evolution? Why not simply a line plot? That's why comes our next try.
+```{r anime_line, message=FALSE, warning=FALSE}
+anime_line<-thisPageData
+p<-anime_line %>%
+  ggplot(aes(x=year, y=value,group=geo,color=geo))+
+  geom_line()+
+  geom_point()+
+  scale_color_viridis(discrete = TRUE)+
+  ggtitle("Population of immigrants of BE, CH and LU")+
+  theme_ipsum()+
+  ylab("Percentage of total population")+
+  scale_x_continuous("Year", breaks=anime_line$year, labels=anime_line$year )+
+  transition_reveal(year)
+p
+```
+What a mess. We've succeeded to summon the Spaghetti plot of the legend.
+
+The best solution to this issue is small multiple charts or a chart with interactivity. Limited by the time, we cannot step further to make these best solutions come true.
+
+An alternative way is to control the number of lines under five, like the chart below.
+
+```{r anime_line2, message=FALSE, warning=FALSE}
+anime_line<-thisPageData[c(which(thisPageData$geo=="LU"),which(thisPageData$geo=="BE"),which(thisPageData$geo=="CH")),]
+p<-anime_line %>%
+  ggplot(aes(x=year, y=value,group=geo,color=geo))+
+  geom_line()+
+  geom_point()+
+  scale_color_viridis(discrete = TRUE)+
+  ggtitle("Population of immigrants of BE, CH and LU")+
+  theme_ipsum()+
+  ylab("Percentage of total population")+
+  scale_x_continuous("Year", breaks=anime_line$year, labels=anime_line$year )+
+  transition_reveal(year)
+p
+```
+Here we can see the evolution of the immigrant population of Belgium, Switzerland, and Luxembourg. The line for Luxembourg shows that the immigrant population increases between 2011 and 2019. In contrast to the line for Switzerland which shows a constant evolution after 2012. Finally, the Belgium line shows after a slight increase, a decrease in the immigrant population.  
+
+
+
+
+## Circular barplot VS lineplot
+
+We can conclude that with barplot, we can show every category of the study, which is impossible for a lineplot. With a lineplot, we can show the evolution with time, which a barplot can hardly make.
+
+Without labels, they have almost the same precision for visualization, as they all show the value by height or length.
+
+The animation might be a good idea to combine their advantages. In this study, it seems that the barplot animation is better. (Only if there are labels and years on it.)
+
+
+
+
+## Choropleth
+
+We cannot talk about geography without a map. Here is a choropleth showing the average value of immigration between 2011 and 2019.
+```{r Choropleth, message=FALSE, warning=FALSE}
+#as usual, load the data
+choro<-thisPageData[thisPageData$year==2019,]
+# the average value of 2011 to 2019
+# disadvantage of aggregate, it will generate two columns, one for type, one for value
+tmp<-aggregate(thisPageData$value, by=list(type=thisPageData$geo),mean)
+choro$value<-tmp$x
+#load the map
+my_spdf <- readOGR( 
+  dsn= "C:/Users/eziod/Pictures/S7/DataVisualisation/TD3 lab3 4/q2/choropleth/TM_WORLD_BORDERS_SIMPL-0.3.shp",
+  layer="TM_WORLD_BORDERS_SIMPL-0.3",
+  verbose=FALSE
+)
+europeMap <- my_spdf[my_spdf@data$REGION==150&my_spdf@data$UN!=643, ]
+# plot(europeMap)
+
+colorMat<-data.frame(choro$geo,choro$value)
+colnames(colorMat)<-c("geo","value")
+colorMat[which(colorMat$geo=="EL"),1]<-"GR"
+colorMat[which(colorMat$geo=="UK"),1]<-"GB"
+
+frameMat<-matrix(nrow=dim(europeMap@data)[1],ncol=2)
+frameMat[,1]<-europeMap@data$ISO2
+
+compare<-rep(NA,2)
+for (i in 1:dim(frameMat)[1]){
+  for (j in 1:dim(colorMat)[1]){
+    if (colorMat[j,1]==frameMat[i,1]){
+      frameMat[i,2]<-colorMat[j,2]
+      compare[i]<-colorMat[j,1]
+    }
+  }
+}
+compare<-na.exclude(compare)
+compare<-compare[1:31]
+setdiff(union(compare, colorMat$geo), intersect(compare, colorMat$geo))
+rm(i)
+rm(j)
+
+
+
+frameMat<-data.frame(frameMat)
+colnames(frameMat)<-c("geo","value")
+summary(is.na(frameMat[,2])) #find how many value in colorMat
+# is put in frameMat 
+# only 30. The result is weird
+frameMat<-data.frame(frameMat)
+colnames(frameMat)<-c("geo","value")
+
+#make color
+library(RColorBrewer)
+my_colors <- brewer.pal(11, "Spectral")
+my_colors <- colorRampPalette(my_colors)(70)
+#data to give color
+class_of_country <- cut(as.numeric(frameMat$value), 70)
+my_colors <- my_colors[as.numeric(class_of_country)]
+
+# Make the plot
+par(mar=c(0,0,0.8,0) )
+plot(europeMap , col=my_colors ,  bg = "#A6CAE0",
+     main="Europe immigration average value from 2011 to 2019") #normally it's correct
+
+# plot a colorbar...by me myself
+my_colors2<-unique(sort(my_colors))
+tmp2<-my_colors2[1]
+my_colors2[1:length(my_colors2)-1]<-my_colors2[2:length(my_colors2)]
+my_colors2[length(my_colors2)]<-tmp2
+my_colors3<-data.frame(c(seq(0.1,5.5,5.4/10),10),1:length(my_colors2),rep(1,length(my_colors2)))
+colnames(my_colors3)<-c("xaxis","xforggplot","one")
+ggplot(my_colors3,aes(x=xforggplot,y=one))+
+  geom_bar(stat="identity",fill=my_colors2,width=1)+
+  theme_minimal()+
+  theme(
+    legend.position = "none",
+    axis.text.y = element_blank(),
+    axis.title.y = element_blank(),
+    panel.grid = element_blank(),
+  )+
+  scale_x_continuous("Homemade colorbar",breaks=my_colors3$xforggplot,labels=my_colors3$xaxis)
+```
+In Matlab, a simple "colorbar" can make a colorbar. We haven't found a similar function in R, so we managed to make a colorbar on our own with ggplot and geom_bar. We announce proudly "tous nos pâtes de  colorbar sont fait à la maison".
+
+
+
+
+## Technical explanation
+We had a lot of difficulties with this plot. Firstly we found that in the first version, the map is made, but the color of each country doesn't match to its value. This is due to the disorder with our matrix and the matrix of the map that we download. This is solved by a combo of "for, for, if".
+
+Secondly, we inspected that almost half of the countries have no color. One reason is that the original value of the country is NA, we can do nothing with this. Another possibility is that the countries don't have the same abbreviation in our matrix and the matrix of the table. Thanks again to "for", we found Greece (GR or EL) and Great Britain (GB or UK).
+
+
+## Explore the result
+The data tells a story. All the charts want to tell THAT story, but from different points of view. 
+The choropleth is the easiest one for visualization, so let's take it as an example. 
+
+A first glimpse of the map tells that, big countries like France, Italy, Spain have fewer immigrants, small countries like Luxembourg and Switzerland have much more immigrants.
+
+However, the value is represented as the percentage of the total population. If we consider this, after a simple calculation, we get the number of immigrants of France is 67 000, and the one of Luxembourg is 63 000, they are at the same level. Meanwhile immigrants to China in 2012 are only 1202.
+
+In a macroscopic view, the amount of immigrants in Europe is huge after 2011. To dig deeper, we must find external reasons in different fields. The biggest reason is the confluence of conflicts in parts of the Middle East, particularly the wars in Syria, Iraq, and Afghanistan. This leads to the European refugee crisis. Most of the European countries chose to accept refugees under certain conditions.
+
+In a microscopic view, northern countries have a greater percentage of immigrants (and also Germany). This is due to the choice of refugees and the policy of each country.
+
+## Conclusion : what we've learned in this project
+A powerful CPU and GPU is needed. RAM of 16 G is recommanded. Close google Chrome when knitting the Rmarkdown.
